@@ -8,6 +8,6 @@ def random_show(path, number = 100):
         f.write('\n'.join(ls))
 
 
-path  = '/home/huydang/project/nemo_capu/data/train.txt'
+path  = '/home/huydang/project/nemo_capu/data/preprocessed/labels_dev.txt'
 
 random_show(path)
