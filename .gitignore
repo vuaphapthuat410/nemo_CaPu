@@ -1,0 +1,7 @@
+data/
+venv/
+checkpoints/
+bert4vn/
+cache/
+save_obj/
+VnCoreNLP/

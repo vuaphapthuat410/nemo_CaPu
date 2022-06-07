@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.7 (nemo_capu)" project-jdk-type="Python SDK" />
+  <component name="UnattendedHostPersistenceState">
+    <option name="openedFilesInfos">
+      <list>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="359" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/t.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="4659" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/train_capu.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="362" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/dataset.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="62" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/.gitignore" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="314" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/reqs.txt" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="682" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/handle_dataset.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="0" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/prepare_data_for_punctuation_capitalization.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="7332" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/model.py" />
+        </OpenedFileInfo>
+      </list>
+    </option>
+  </component>
+</project>
