@@ -5,16 +5,8 @@
     <option name="openedFilesInfos">
       <list>
         <OpenedFileInfo>
-          <option name="caretOffset" value="359" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/t.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="7277" />
+          <option name="caretOffset" value="7338" />
           <option name="fileUrl" value="file://$PROJECT_DIR$/model.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="62" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/.gitignore" />
         </OpenedFileInfo>
         <OpenedFileInfo>
           <option name="caretOffset" value="682" />
@@ -39,6 +31,18 @@
         <OpenedFileInfo>
           <option name="caretOffset" value="362" />
           <option name="fileUrl" value="file://$PROJECT_DIR$/dataset.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="1074" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/train_capu.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="229" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/data_preprocessor/DataPreprocessor.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="23" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/reqs.txt" />
         </OpenedFileInfo>
       </list>
     </option>

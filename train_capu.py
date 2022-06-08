@@ -100,8 +100,8 @@ def train(args, train_dataloader,eval_dataloader,model):
             input_ids, attention_mask, capital_labels, punctuation_labels = input_ids.type(torch.LongTensor).to(device), attention_mask.to(device), capital_labels.type(torch.LongTensor).to(device),\
                 punctuation_labels.type(torch.LongTensor).to(device)
 
-            print(punctuation_labels[0][:300])
-            input()
+            # print(punctuation_labels[0][:300])
+            # input()
 
             if args.amp:
                 with autocast():
@@ -202,19 +202,23 @@ if __name__ == '__main__':
 
 
     bert = RobertaModel.from_pretrained(model_name, cache_dir=cache_dir)
-    punct_class_weight = torch.Tensor([2.7295e-01, 5.1040e+00, 7.1929e+00, 6.9293e+02])
-    cap_class_weight = torch.Tensor([0.6003, 2.9913])
+    # punct_class_weight = torch.Tensor([2.7295e-01, 5.1040e+00, 7.1929e+00, 6.9293e+02])
+    # cap_class_weight = torch.Tensor([0.6003, 2.9913])
+    # punct_class_weight = torch.Tensor([1, 3,5, 10])
+    # cap_class_weight = torch.Tensor([0.6003, 1.0])
+    punct_class_weight = None
+    cap_class_weight = None
     model = HuyDangCapuModel(initialized_bert=bert,punctuation_class_weight=punct_class_weight, capital_class_weight=cap_class_weight)
 
-    path = '/home/huydang/project/nemo_capu/checkpoints/training_500k/2022_06_06_08_52_53/checkpoint_9.ckpt'
-    model.load_state_dict(torch.load(path))
-    BATCH_SIZE = 1
+    # path = '/home/huydang/project/nemo_capu/checkpoints/training_500k/2022_06_06_08_52_53/checkpoint_9.ckpt'
+    # model.load_state_dict(torch.load(path))
+    BATCH_SIZE = 32
     SHUFFLE = True
 
-    train_dataset = CapuDataset('data/preprocessed/text_train.txt', 'data/preprocessed/labels_train.txt', tokenizer, max_len=512, max_sample=5000)
+    train_dataset = CapuDataset('data/preprocessed/text_train.txt', 'data/preprocessed/labels_train.txt', tokenizer, max_len=512, max_sample=500000)
     train_dataloader = DataLoader(train_dataset, BATCH_SIZE, sampler=None,
                                   shuffle=SHUFFLE, drop_last=False)
-    eval_dataset = CapuDataset('data/preprocessed/text_dev.txt', 'data/preprocessed/labels_dev.txt', tokenizer, max_len=512, max_sample=2000)
+    eval_dataset = CapuDataset('data/preprocessed/text_dev.txt', 'data/preprocessed/labels_dev.txt', tokenizer, max_len=512, max_sample=20000)
     eval_dataloader = DataLoader(eval_dataset, BATCH_SIZE, sampler=None,
                                  shuffle=SHUFFLE, drop_last=False)
 

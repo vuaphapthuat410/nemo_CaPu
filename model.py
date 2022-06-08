@@ -157,7 +157,7 @@ class HuyDangCapuModel(nn.Module):
 
 if __name__ == '__main__':
 
-    path = '/home/huydang/project/nemo_capu/checkpoints/training_500k_ep10/2022_06_07_02_05_27/checkpoint_0.ckpt'
+    path = '/home/huydang/project/nemo_capu/checkpoints/training_500k_fix_weight/2022_06_07_17_46_37/checkpoint_9.ckpt'
 
     bert = RobertaModel.from_pretrained(model_name, cache_dir=cache_dir)
     punct_class_weight = torch.Tensor([2.7295e-01, 5.1040e+00, 7.1929e+00, 6.9293e+02])

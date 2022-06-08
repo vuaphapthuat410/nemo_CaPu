@@ -4,7 +4,9 @@ from collections import Counter
 import pickle
 import re
 from vncorenlp import VnCoreNLP
+import nltk
 from nltk.tokenize import sent_tokenize
+nltk.download('punkt')
 import random
 from tqdm import tqdm
 import numpy as np
