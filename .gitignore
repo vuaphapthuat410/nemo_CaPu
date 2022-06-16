@@ -5,3 +5,5 @@ bert4vn/
 cache/
 save_obj/
 VnCoreNLP/
+*.ignore.*
+test_nemo/

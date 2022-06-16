@@ -5,44 +5,12 @@
     <option name="openedFilesInfos">
       <list>
         <OpenedFileInfo>
-          <option name="caretOffset" value="7338" />
+          <option name="caretOffset" value="118791" />
+          <option name="fileUrl" value="file://$PROJECT_DIR$/venv/lib/python3.7/site-packages/torch/nn/functional.py" />
+        </OpenedFileInfo>
+        <OpenedFileInfo>
+          <option name="caretOffset" value="4147" />
           <option name="fileUrl" value="file://$PROJECT_DIR$/model.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="682" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/handle_dataset.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="0" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/prepare_data_for_punctuation_capitalization.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="989" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/README.md" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="297" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/show.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="0" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/sample.txt" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="362" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/dataset.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="1074" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/train_capu.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="229" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/data_preprocessor/DataPreprocessor.py" />
-        </OpenedFileInfo>
-        <OpenedFileInfo>
-          <option name="caretOffset" value="23" />
-          <option name="fileUrl" value="file://$PROJECT_DIR$/reqs.txt" />
         </OpenedFileInfo>
       </list>
     </option>

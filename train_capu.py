@@ -1,4 +1,4 @@
-
+import json
 import os
 import time
 import random
@@ -20,7 +20,7 @@ from importlib.machinery import SourceFileLoader
 import os
 from torch.utils.data import DataLoader, DistributedSampler
 from dataset import CapuDataset, CAP_ID_TO_LABEL,CAP_LABEL_TO_ID,PUNC_ID_TO_LABEL,PUNCT_LABEL_TO_ID
-
+from sklearn.metrics import classification_report
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -45,7 +45,8 @@ def args_parser():
     parser.add_argument("--overlap", type=int, default=50,
                         help="overlap size of the two sliding windows")
     parser.add_argument("--threshold", type=int, default=5,
-                        help="At least the number of times a possible relationship should appear in the training set (should be greater than or equal to the threshold in the data preprocessing stage)")
+                        help="At least the number of times a possible relationship should appear in the training set "
+                             "(should be greater than or equal to the threshold in the data preprocessing stage)")
     parser.add_argument("--local_rank", type=int, default=-
                         1, help="用于DistributedDataParallel")
     parser.add_argument("--max_grad_norm", type=float, default=1)
@@ -91,47 +92,91 @@ def train(args, train_dataloader,eval_dataloader,model):
 
         tqdm_train_dataloader = tqdm(
             train_dataloader, desc="Training epoch:%d" % epoch)
-        for i, batch in enumerate(tqdm_train_dataloader):
-            torch.cuda.empty_cache()
-            optimizer.zero_grad()
-            input_ids, attention_mask, capital_labels, punctuation_labels = batch['input_ids'], batch['attention_mask'], batch['capital_labels'],\
-                batch['punctuation_labels']
 
-            input_ids, attention_mask, capital_labels, punctuation_labels = input_ids.type(torch.LongTensor).to(device), attention_mask.to(device), capital_labels.type(torch.LongTensor).to(device),\
-                punctuation_labels.type(torch.LongTensor).to(device)
+        with tqdm_train_dataloader as line1:
+            with tqdm(total=len(tqdm_train_dataloader), bar_format="{postfix}") as line2:
+                for i, batch in enumerate(line1):
+                    torch.cuda.empty_cache()
+                    optimizer.zero_grad()
 
-            # print(punctuation_labels[0][:300])
-            # input()
+                    input_ids, attention_mask, capital_labels, punctuation_labels, loss_mask, subtoken_mask = \
+                        batch['input_ids'], batch['attention_mask'], batch['capital_labels'],\
+                        batch['punctuation_labels'], batch['loss_mask'], batch['subtoken_mask']
 
-            if args.amp:
-                with autocast():
-                    loss, (loss_t1, loss_t2) = model(
-                        input_ids, attention_mask, capital_labels = capital_labels, punctuation_labels = punctuation_labels)
-                scaler.scale(loss).backward()
-                if args.max_grad_norm > 0:
-                    scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), args.max_grad_norm)
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                loss, (loss_t1, loss_t2) =  model(input_ids, attention_mask, capital_labels = capital_labels, punctuation_labels = punctuation_labels)
-                loss.backward()
-                if args.max_grad_norm > 0:
-                    clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                optimizer.step()
-            lr = optimizer.param_groups[0]['lr']
-            named_parameters = [
-                (n, p) for n, p in model.named_parameters() if not p.grad is None]
-            grad_norm = torch.norm(torch.stack(
-                [torch.norm(p.grad) for n, p in named_parameters])).item()
-            if args.warmup_ratio > 0:
-                scheduler.step()
-            tqdm_dict = dict()
-            tqdm_dict["Loss"] = "{:.5f}".format(loss.item())
-            tqdm_dict["Capital_loss"] = "{:.5f}".format(loss_t1)
-            tqdm_dict["Punctuation_loss"] = "{:.5f}".format(loss_t2)
-            tqdm_train_dataloader.set_postfix(tqdm_dict)
+
+                    input_ids = input_ids.type(torch.LongTensor).to(device)
+                    attention_mask = attention_mask.to(device)
+                    capital_labels = capital_labels.type(torch.LongTensor).to(device)
+                    punctuation_labels = punctuation_labels.type(torch.LongTensor).to(device)
+                    loss_mask = loss_mask.type(torch.BoolTensor).to(device)
+                    subtoken_mask = subtoken_mask.type(torch.BoolTensor).to(device)
+
+                    if args.amp:
+                        with autocast():
+                            loss, (loss_t1, loss_t2), capital_idxs, punctuation_ids = model(
+                                input_ids, attention_mask, capital_labels=capital_labels, punctuation_labels=punctuation_labels,
+                                loss_mask=loss_mask, return_idx=True)
+                        scaler.scale(loss).backward()
+                        if args.max_grad_norm > 0:
+                            scaler.unscale_(optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            model.parameters(), args.max_grad_norm)
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        loss, (loss_t1, loss_t2), capital_idxs, punctuation_ids = model(input_ids, attention_mask, capital_labels=capital_labels,  punctuation_labels=punctuation_labels, loss_mask=loss_mask, return_idx=True)
+                        loss.backward()
+                        if args.max_grad_norm > 0:
+                            clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                        optimizer.step()
+
+                    lr = optimizer.param_groups[0]['lr']
+                    named_parameters = [
+                        (n, p) for n, p in model.named_parameters() if not p.grad is None]
+                    grad_norm = torch.norm(torch.stack(
+                        [torch.norm(p.grad) for n, p in named_parameters])).item()
+                    if args.warmup_ratio > 0:
+                        scheduler.step()
+
+                    punctuation_ids = punctuation_ids[subtoken_mask]
+                    punctuation_labels = punctuation_labels[subtoken_mask]
+                    capital_idxs = capital_idxs[subtoken_mask]
+                    capital_labels = capital_labels[subtoken_mask]
+
+                    punct_cls_rp = classification_report(punctuation_ids.cpu().numpy(),
+                                                         punctuation_labels.cpu().numpy(), output_dict=True,
+                                                         zero_division=0)
+                    capi_cls_rp = classification_report(capital_idxs.cpu().numpy(), capital_labels.cpu().numpy(),
+                                                        output_dict=True, zero_division=0)
+
+                    with open('check.json', 'w') as f:
+                        json.dump(capi_cls_rp, f, ensure_ascii=False)
+
+                    tqdm_dict = dict()
+                    tqdm_dict2 = dict()
+
+                    tqdm_dict["Loss"] = "{:.5f}".format(loss.item())
+                    tqdm_dict["Capital_loss"] = "{:.5f}".format(loss_t1)
+                    tqdm_dict["Punctuation_loss"] = "{:.5f}".format(loss_t2)
+
+                    tqdm_dict2['Punct Acc'] = punct_cls_rp['accuracy']
+                    if '0' in punct_cls_rp:
+                        tqdm_dict2['Null-punc f1'] = punct_cls_rp['0']['f1-score']
+                    if '1' in punct_cls_rp:
+                        tqdm_dict2['Comma f1'] = punct_cls_rp['1']['f1-score']
+                    if '2' in punct_cls_rp:
+                        tqdm_dict2['Period f1'] = punct_cls_rp['2']['f1-score']
+                    if '3' in punct_cls_rp:
+                        tqdm_dict2['Questionmark f1'] = punct_cls_rp['3']['f1-score']
+
+                    tqdm_dict2['Capital Acc'] = capi_cls_rp['accuracy']
+                    if '0' in punct_cls_rp:
+                        tqdm_dict2['Null-cap f1'] = punct_cls_rp['0']['f1-score']
+                    if '1' in punct_cls_rp:
+                        tqdm_dict2['Upper f1'] = punct_cls_rp['1']['f1-score']
+
+                    line1.set_postfix(tqdm_dict)
+                    line2.set_postfix(tqdm_dict2)
 
         if args.local_rank in [-1, 0] and not args.not_save:
             if hasattr(model, 'module'):
@@ -151,30 +196,69 @@ def train(args, train_dataloader,eval_dataloader,model):
 
         tqdm_eval_dataloader = tqdm(
             eval_dataloader, desc="Evaluating epoch:%d" % epoch)
-        for i, batch in enumerate(tqdm_eval_dataloader):
+        with tqdm_eval_dataloader as line1:
+            with tqdm(total=len(tqdm_eval_dataloader), bar_format="{postfix}") as line2:
+                for i, batch in enumerate(line1):
 
-            torch.cuda.empty_cache()
+                    torch.cuda.empty_cache()
 
-            input_ids, attention_mask, capital_labels, punctuation_labels = batch['input_ids'], batch['attention_mask'], batch['capital_labels'],\
-                batch['punctuation_labels']
-            input_ids, attention_mask, capital_labels, punctuation_labels = input_ids.type(torch.LongTensor).to(device), attention_mask.to(device), capital_labels.type(torch.LongTensor).to(device),\
-                punctuation_labels.type(torch.LongTensor).to(device)
+                    input_ids, attention_mask, capital_labels, punctuation_labels = batch['input_ids'], batch['attention_mask'], batch['capital_labels'], batch['punctuation_labels']
+                    loss_mask = batch['loss_mask']
 
-            with torch.no_grad():
-                if args.amp:
-                    with autocast():
-                        loss, (loss_t1, loss_t2) = model(
-                            input_ids, attention_mask, capital_labels = capital_labels, punctuation_labels = punctuation_labels)
-                else:
-                    loss, (loss_t1, loss_t2), capital_pred, punctuation_pred =  model(input_ids, attention_mask, capital_labels = capital_labels, punctuation_labels = punctuation_labels,return_idx = True)
-                    if i == len(tqdm_eval_dataloader) - 1:
-                        torch.save(punctuation_pred,'save_obj/punctuation_pred.pt')
-                        torch.save(capital_pred, 'save_obj/capital_pred.pt')
-            tqdm_dict = {}
-            tqdm_dict["Eval loss"] = "{:.5f}".format(loss.item())
-            tqdm_dict["Eval Capital_loss"] = "{:.5f}".format(loss_t1)
-            tqdm_dict["Eval Punctuation_loss"] = "{:.5f}".format(loss_t2)
-            tqdm_eval_dataloader.set_postfix(tqdm_dict)
+                    subtoken_mask = batch['subtoken_mask']
+                    input_ids, attention_mask, capital_labels, punctuation_labels = \
+                        input_ids.type(torch.LongTensor).to(device), attention_mask.to(device),\
+                        capital_labels.type(torch.LongTensor).to(device),\
+                        punctuation_labels.type(torch.LongTensor).to(device)
+                    loss_mask = loss_mask.type(torch.BoolTensor).to(device)
+                    subtoken_mask = subtoken_mask.type(torch.BoolTensor).to(device)
+
+                    with torch.no_grad():
+                        if args.amp:
+                            with autocast():
+                                loss, (loss_t1, loss_t2), capital_idxs, punctuation_ids = model(
+                                    input_ids, attention_mask, capital_labels=capital_labels,
+                                    punctuation_labels=punctuation_labels,
+                                    loss_mask=loss_mask, return_idx=True)
+                        else:
+                            loss, (loss_t1, loss_t2), capital_idxs, punctuation_ids =\
+                                model(input_ids, attention_mask, capital_labels=capital_labels,
+                                      punctuation_labels=punctuation_labels, loss_mask=loss_mask, return_idx=True)
+
+                    punctuation_ids = punctuation_ids[subtoken_mask]
+                    punctuation_labels = punctuation_labels[subtoken_mask]
+                    capital_ids = capital_idxs[subtoken_mask]
+                    capital_labels = capital_labels[subtoken_mask]
+
+                    tqdm_dict = {}
+                    tqdm_dict2 = {}
+                    tqdm_dict["Eval loss"] = "{:.5f}".format(loss.item())
+                    tqdm_dict["Eval Capital_loss"] = "{:.5f}".format(loss_t1)
+                    tqdm_dict["Eval Punctuation_loss"] = "{:.5f}".format(loss_t2)
+                    punct_cls_rp = classification_report(punctuation_ids.cpu().numpy(),
+                                                         punctuation_labels.cpu().numpy(),
+                                                         output_dict=True, zero_division=0)
+                    capi_cls_rp = classification_report(capital_ids.cpu().numpy(), capital_labels.cpu().numpy(),
+                                                        output_dict=True, zero_division=0)
+
+                    tqdm_dict2['Eval Punct Acc'] = punct_cls_rp['accuracy']
+                    if '0' in punct_cls_rp:
+                        tqdm_dict2['Eval Null-punc f1'] = punct_cls_rp['0']['f1-score']
+                    if '1' in punct_cls_rp:
+                        tqdm_dict2['Eval Comma f1'] = punct_cls_rp['1']['f1-score']
+                    if '2' in punct_cls_rp:
+                        tqdm_dict2['Eval Period f1'] = punct_cls_rp['2']['f1-score']
+                    if '3' in punct_cls_rp:
+                        tqdm_dict2['Eval Questionmark f1'] = punct_cls_rp['3']['f1-score']
+
+                    tqdm_dict2['Eval Capital Acc'] = capi_cls_rp['accuracy']
+                    if '0' in punct_cls_rp:
+                        tqdm_dict2['Eval Null-cap f1'] = punct_cls_rp['0']['f1-score']
+                    if '1' in punct_cls_rp:
+                        tqdm_dict2['Eval Upper f1'] = punct_cls_rp['1']['f1-score']
+
+                    line1.set_postfix(tqdm_dict)
+                    line2.set_postfix(tqdm_dict2)
 
         if args.local_rank != -1:
             torch.distributed.barrier()
@@ -198,27 +282,31 @@ if __name__ == '__main__':
     cache_dir = './cache'
     model_name = 'nguyenvulebinh/envibert'
     download_tokenizer_files(cache_dir,model_name)
-    tokenizer = SourceFileLoader("envibert.tokenizer", os.path.join(cache_dir, 'envibert_tokenizer.py')).load_module().RobertaTokenizer( cache_dir)
+    tokenizer = SourceFileLoader("envibert.tokenizer", os.path.join(cache_dir, 'envibert_tokenizer.py'))\
+        .load_module().RobertaTokenizer( cache_dir)
 
 
     bert = RobertaModel.from_pretrained(model_name, cache_dir=cache_dir)
-    # punct_class_weight = torch.Tensor([2.7295e-01, 5.1040e+00, 7.1929e+00, 6.9293e+02])
-    # cap_class_weight = torch.Tensor([0.6003, 2.9913])
+    punct_class_weight = torch.Tensor([2.7295e-01, 5.1040e+00, 7.1929e+00, 6.9293e+02])
+    cap_class_weight = torch.Tensor([0.6003, 2.9913])
     # punct_class_weight = torch.Tensor([1, 3,5, 10])
     # cap_class_weight = torch.Tensor([0.6003, 1.0])
-    punct_class_weight = None
-    cap_class_weight = None
-    model = HuyDangCapuModel(initialized_bert=bert,punctuation_class_weight=punct_class_weight, capital_class_weight=cap_class_weight)
+    # punct_class_weight = None
+    # cap_class_weight = None
+    model = HuyDangCapuModel(initialized_bert=bert, punctuation_class_weight=punct_class_weight,
+                             capital_class_weight=cap_class_weight)
 
-    # path = '/home/huydang/project/nemo_capu/checkpoints/training_500k/2022_06_06_08_52_53/checkpoint_9.ckpt'
-    # model.load_state_dict(torch.load(path))
-    BATCH_SIZE = 32
+    path = '/home/huydang/project/nemo_capu/checkpoints/training_1000k_custom_weighted/2022_06_10_11_18_58/checkpoint_9.ckpt'
+    model.load_state_dict(torch.load(path))
+    BATCH_SIZE = 64
     SHUFFLE = True
 
-    train_dataset = CapuDataset('data/preprocessed/text_train.txt', 'data/preprocessed/labels_train.txt', tokenizer, max_len=512, max_sample=500000)
+    train_dataset = CapuDataset('data/preprocessed/text_train.txt', 'data/preprocessed/labels_train.txt', tokenizer,
+                                max_len=512, max_sample=1000000, shuffle=True)
     train_dataloader = DataLoader(train_dataset, BATCH_SIZE, sampler=None,
                                   shuffle=SHUFFLE, drop_last=False)
-    eval_dataset = CapuDataset('data/preprocessed/text_dev.txt', 'data/preprocessed/labels_dev.txt', tokenizer, max_len=512, max_sample=20000)
+    eval_dataset = CapuDataset('data/preprocessed/text_dev.txt', 'data/preprocessed/labels_dev.txt', tokenizer,
+                               max_len=512, max_sample=20000, shuffle=True)
     eval_dataloader = DataLoader(eval_dataset, BATCH_SIZE, sampler=None,
                                  shuffle=SHUFFLE, drop_last=False)
 

@@ -4,3 +4,5 @@ tqdm
 bs4
 nltk
 sklearn
+pytorch-ignite
+nemo-toolkit[all]

@@ -1,3 +1,4 @@
+import random
 import traceback
 
 from tqdm import tqdm
@@ -32,19 +33,28 @@ logging.basicConfig(level=logging.INFO)
 
 class CapuDataset:
     def __init__(self, text_path=None, label_path=None, tokenizer=None, max_len=512, infer=False,
-                 infer_text_ls=list, max_sample=None):
+                 infer_text_ls=list, max_sample=None, shuffle=None):
 
         self.tokenizer = tokenizer
         self.max_len = max_len
         self.logger = logging.getLogger(__name__)
         self.all_samples = []
         if not infer:
-            assert text_path is not None and label_path is not None, 'Training mode require text path and label'
+            assert text_path is not None and label_path is not None, 'Training mode require text path and label path'
             with open(text_path) as f:
                 text_data = f.read().splitlines()
 
             with open(label_path) as f:
                 label_data = f.read().splitlines()
+
+            if shuffle:
+                temp = list(zip(text_data, label_data))
+                random.shuffle(temp)
+                text_data, label_data = zip(*temp)
+                text_data = list(text_data)
+                label_data = list(label_data)
+
+                del temp
             if max_sample is not None:
                 text_data = text_data[:max_sample]
                 label_data = label_data[:max_sample]
@@ -57,6 +67,7 @@ class CapuDataset:
             assert infer_text_ls, 'Infer mode require infer_text_ls != None and != empty list'
             self.infer_text_ls = infer_text_ls
             self.init_infer_data()
+
 
 
     def init_infer_data(self):
@@ -91,6 +102,7 @@ class CapuDataset:
                 capital_labels = [CAP_LABEL_TO_ID[i[1]] for i in label_ls]
                 assert len(punct_labels) == len(capital_labels), 'len label mismatch'
                 assert len(punct_labels) == len(text.split()), 'len label text mis match'
+                subtoken_mask = []
                 punct_labels_ex = []
                 capital_labels_ex = []
                 attention_mask = []
@@ -102,23 +114,29 @@ class CapuDataset:
                     if token_i.startswith('▁'):
                         i += 1
                         count += 1
+                        subtoken_mask.append(True)
+                    else:
+                        subtoken_mask.append(False)
 
                     id_i = self.tokenizer.convert_tokens_to_ids(token_i)
 
-                    input_ids.append(id_i)
+                    input_ids.append(int(id_i))
                     attention_mask.append(1)
+
                     punct_labels_ex.append(punct_labels[i])
                     capital_labels_ex.append(capital_labels[i])
 
+                subtoken_mask.append(False)
                 punct_labels_ex.append(0)
                 capital_labels_ex.append(0)
                 attention_mask.append(1)
                 input_ids.append(2)
 
-                punct_labels_ex.insert(0,0)
-                capital_labels_ex.insert(0,0)
-                attention_mask.insert(0,1)
-                input_ids.insert(0,0)
+                subtoken_mask.append(False)
+                punct_labels_ex.insert(0, 0)
+                capital_labels_ex.insert(0, 0)
+                attention_mask.insert(0, 1)
+                input_ids.insert(0, 0)
 
                 # assert count == len(punct_labels_ex) - 2, 'len mis match _token with len label'
 
@@ -127,7 +145,7 @@ class CapuDataset:
                     capital_labels_ex.append(0)
                     attention_mask.append(0)
                     input_ids.append(1)
-
+                    subtoken_mask.append(False)
                 # tta = ''
                 # for tk, p_lb, c_lb in zip(tokens_ls, punct_labels_ex[1:], capital_labels_ex[1:]):
                 #     tt = tk + PUNC_ID_TO_LABEL[p_lb] + ' '
@@ -138,15 +156,23 @@ class CapuDataset:
                 # input()
                 punct_labels_ex = torch.Tensor(punct_labels_ex)
                 capital_labels_ex = torch.Tensor(capital_labels_ex)
-                attention_mask = torch.Tensor(punct_labels_ex)
+                attention_mask = torch.Tensor(attention_mask)
                 input_ids = torch.Tensor(input_ids)
-
-
+                subtoken_mask = torch.tensor(subtoken_mask)
+                loss_mask = torch.clone(attention_mask)
+                # print(input_ids)
+                # print(loss_mask)
+                loss_mask = (loss_mask == 1)
+                # print(loss_mask)
+                # print(subtoken_mask)
+                # input()
                 self.all_samples.append({
                     "input_ids": input_ids,
                     "attention_mask": attention_mask,
                     "capital_labels": capital_labels_ex,
-                    "punctuation_labels": punct_labels_ex
+                    "punctuation_labels": punct_labels_ex,
+                    'loss_mask': loss_mask,
+                    'subtoken_mask': subtoken_mask
                 })
             except Exception as ex:
                 fail_sample += 1
