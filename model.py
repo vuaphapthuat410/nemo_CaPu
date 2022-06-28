@@ -162,11 +162,11 @@ class HuyDangCapuModel(nn.Module):
                 tokens_batch = [initialized_tokenizer.tokenize(q) for q in queries_batch]
                 queries_batch = [q.split() for q in queries_batch]
                 cap_labels_batch = self._map_valid_id(capital_idxs, tokens_batch, queries_batch, CAP_ID_TO_LABEL)
-                print('cap')
-                print(cap_labels_batch)
+                # print('cap')
+                # print(cap_labels_batch)
                 punct_labels_batch = self._map_valid_id(punctuation_ids, tokens_batch, queries_batch, PUNC_ID_TO_LABEL)
-                print('punct')
-                print(punct_labels_batch)
+                # print('punct')
+                # print(punct_labels_batch)
                 for ind,query in enumerate(queries_batch):
                     w_ls = []
                     for w,cap, punct in zip(query, cap_labels_batch[ind], punct_labels_batch[ind]):
@@ -179,19 +179,37 @@ class HuyDangCapuModel(nn.Module):
             return res_batch
 
 
-
+def remove_punctuation(test_str):
+    punc = ''';,.?'''
+ 
+    # Removing punctuations in string
+    # Using loop + punctuation string
+    for ele in test_str:
+        if ele in punc:
+            test_str = test_str.replace(ele, "")
+    
+    return test_str
 
 if __name__ == '__main__':
 
-    path = '/home/huydang/project/nemo_capu/checkpoints/training_1000k_fromep10_custom_weighted/2022_06_13_02_56_21/checkpoint_9.ckpt'
+    path = '/home/huydang/project/nemo_capu/checkpoints/training_new128_5000k_from_ep10_formal_weighted/2022_06_20_07_53_10/checkpoint_35.ckpt'
 
     bert = RobertaModel.from_pretrained(model_name, cache_dir=cache_dir)
     punct_class_weight = torch.Tensor([2.7295e-01, 5.1040e+00, 7.1929e+00, 6.9293e+02])
     cap_class_weight = torch.Tensor([0.6003, 2.9913])
+    # punct_class_weight = None
+    # cap_class_weight = None
     model = HuyDangCapuModel(None, bert, punctuation_class_weight=punct_class_weight, capital_class_weight=cap_class_weight)
     model.load_state_dict(torch.load(path))
 
-    sentence_ls = ['hôm qua trời mưa tôi không đi làm trường phòng gọi điện nhắn tin tôi cũng mặc kệ','bạn tên là gì','ông nguyễn văn  linh - trưởng phòng thực tập vừa mới được tăng lương','đi khi nào']
+    sentence_ls = ['','hôm qua trời mưa tôi không đi làm trường phòng gọi điện nhắn tin tôi cũng mặc kệ','bạn tên là gì','ông nguyễn văn  linh - trưởng phòng thực tập vừa mới được tăng lương','đi khi nào']
 
 
     print(model.infer(text_ls = sentence_ls ,batch_size = 32))
+
+    with open('test.txt') as f:
+        test_str = f.read()
+    
+    normal_t = remove_punctuation(test_str).lower()
+    print(normal_t)
+    print(model.infer(text_ls = [normal_t] ,batch_size = 1))

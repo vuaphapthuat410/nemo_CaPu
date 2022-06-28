@@ -7,3 +7,4 @@ save_obj/
 VnCoreNLP/
 *.ignore.*
 test_nemo/
+data_new/

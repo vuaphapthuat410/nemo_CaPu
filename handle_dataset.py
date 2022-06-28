@@ -197,7 +197,7 @@ def get_data():
     dev_origin_text_ls  = []
     test_origin_text_ls = []
     MIN_SENT_LENGTH = 10
-    MAX_SENT_LENGTH = 510
+    MAX_SENT_LENGTH = 126
 
     all_sentences_ls = []
     for category in category_list:
@@ -256,11 +256,11 @@ def get_data():
     print('dev doc:',len(dev_origin_text_ls))
     print('test doc:',len(test_origin_text_ls))
 
-    with open('data/train.txt','w') as f:
+    with open('data_new/train.txt','w') as f:
         f.write('\n'.join(train_origin_text_ls))
-    with open('data/dev.txt','w') as f:
+    with open('data_new/dev.txt','w') as f:
         f.write('\n'.join(dev_origin_text_ls))
-    with open('data/test.txt','w') as f:
+    with open('data_new/test.txt','w') as f:
         f.write('\n'.join(test_origin_text_ls))
 
 def random_show(path, number = 1000):
@@ -271,5 +271,5 @@ def random_show(path, number = 1000):
 
 if __name__ == '__main__':
     get_data()
-    random_show('data/train.txt')
+    random_show('data_new/train.txt')
 

@@ -81,8 +81,9 @@ class CapuDataset:
                 input_ids = tokenize_res.input_ids.squeeze()
                 attention_mask = tokenize_res.attention_mask.squeeze()
 
+                
                 self.all_samples.append({
-                    "input_ids": input_ids,
+                    "input_ids": input_ids.type(torch.LongTensor),
                     "attention_mask": attention_mask
                 })
 
@@ -166,13 +167,16 @@ class CapuDataset:
                 # print(loss_mask)
                 # print(subtoken_mask)
                 # input()
+                
+
+
                 self.all_samples.append({
-                    "input_ids": input_ids,
+                    "input_ids": input_ids.type(torch.LongTensor),
                     "attention_mask": attention_mask,
-                    "capital_labels": capital_labels_ex,
-                    "punctuation_labels": punct_labels_ex,
-                    'loss_mask': loss_mask,
-                    'subtoken_mask': subtoken_mask
+                    "capital_labels": capital_labels_ex.type(torch.LongTensor),
+                    "punctuation_labels": punct_labels_ex.type(torch.LongTensor),
+                    'loss_mask': loss_mask.type(torch.BoolTensor),
+                    'subtoken_mask': subtoken_mask.type(torch.BoolTensor)
                 })
             except Exception as ex:
                 fail_sample += 1

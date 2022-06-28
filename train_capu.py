@@ -95,6 +95,7 @@ def train(args, train_dataloader,eval_dataloader,model):
 
         with tqdm_train_dataloader as line1:
             with tqdm(total=len(tqdm_train_dataloader), bar_format="{postfix}") as line2:
+
                 for i, batch in enumerate(line1):
                     torch.cuda.empty_cache()
                     optimizer.zero_grad()
@@ -171,9 +172,9 @@ def train(args, train_dataloader,eval_dataloader,model):
 
                     tqdm_dict2['Capital Acc'] = capi_cls_rp['accuracy']
                     if '0' in punct_cls_rp:
-                        tqdm_dict2['Null-cap f1'] = punct_cls_rp['0']['f1-score']
+                        tqdm_dict2['Null-cap f1'] = capi_cls_rp['0']['f1-score']
                     if '1' in punct_cls_rp:
-                        tqdm_dict2['Upper f1'] = punct_cls_rp['1']['f1-score']
+                        tqdm_dict2['Upper f1'] = capi_cls_rp['1']['f1-score']
 
                     line1.set_postfix(tqdm_dict)
                     line2.set_postfix(tqdm_dict2)
@@ -296,17 +297,17 @@ if __name__ == '__main__':
     model = HuyDangCapuModel(initialized_bert=bert, punctuation_class_weight=punct_class_weight,
                              capital_class_weight=cap_class_weight)
 
-    path = '/home/huydang/project/nemo_capu/checkpoints/training_1000k_custom_weighted/2022_06_10_11_18_58/checkpoint_9.ckpt'
-    model.load_state_dict(torch.load(path))
+    path = '/home/huydang/project/nemo_capu/checkpoints/training_new128_5000k_formal_weight/2022_06_17_03_02_06/checkpoint_9.ckpt'
+    # model.load_state_dict(torch.load(path))
     BATCH_SIZE = 64
     SHUFFLE = True
 
-    train_dataset = CapuDataset('data/preprocessed/text_train.txt', 'data/preprocessed/labels_train.txt', tokenizer,
-                                max_len=512, max_sample=1000000, shuffle=True)
+    train_dataset = CapuDataset('data_new/preprocessed/text_train.txt', 'data_new/preprocessed/labels_train.txt', tokenizer,
+                                max_len=512, max_sample=5000000, shuffle=True)
     train_dataloader = DataLoader(train_dataset, BATCH_SIZE, sampler=None,
                                   shuffle=SHUFFLE, drop_last=False)
-    eval_dataset = CapuDataset('data/preprocessed/text_dev.txt', 'data/preprocessed/labels_dev.txt', tokenizer,
-                               max_len=512, max_sample=20000, shuffle=True)
+    eval_dataset = CapuDataset('data_new/preprocessed/text_dev.txt', 'data_new/preprocessed/labels_dev.txt', tokenizer,
+                               max_len=512, max_sample=30000, shuffle=True)
     eval_dataloader = DataLoader(eval_dataset, BATCH_SIZE, sampler=None,
                                  shuffle=SHUFFLE, drop_last=False)
 
