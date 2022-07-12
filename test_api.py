@@ -1,5 +1,8 @@
 import traceback
 
+from fastapi import FastAPI
+import uvicorn
+
 import torch
 import torch.nn as nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
@@ -7,20 +10,26 @@ from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from transformers import AutoModel, AutoTokenizer, RobertaModel
 from dataset import CapuDataset
 
+from underthesea import word_tokenize
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+
 from typing import List, Optional, Tuple, Union
 from torch.utils.data import DataLoader, DistributedSampler
 from tqdm import tqdm
 from dataset import CAP_ID_TO_LABEL, CAP_LABEL_TO_ID, PUNC_ID_TO_LABEL, PUNCT_LABEL_TO_ID
 from importlib.machinery import SourceFileLoader
 from nemo.collections.nlp.modules.common import TokenClassifier
-import os
 
+import os
+import json
+import time
+
+# prerequisite for envibert
 from nemo.collections.common.losses import AggregatorLoss as nemo_AggregatorLoss, CrossEntropyLoss as nemo_CrossEntropyLoss
 cache_dir = './cache'
 model_name = 'nguyenvulebinh/envibert'
 default_tokenizer = SourceFileLoader("envibert.tokenizer",
                     os.path.join(cache_dir, 'envibert_tokenizer.py')).load_module().RobertaTokenizer(cache_dir)
-
 
 class HuyDangCapuModel(nn.Module):
 
@@ -190,26 +199,61 @@ def remove_punctuation(test_str):
     
     return test_str
 
+#init app
+app = FastAPI()
+
+path = '/home/huydang/project/nemo_capu/checkpoints/training_new128_5000k_from_ep10_formal_weighted/2022_06_20_07_53_10/checkpoint_35.ckpt'
+
+bert = RobertaModel.from_pretrained(model_name, cache_dir=cache_dir)
+punct_class_weight = torch.Tensor([2.7295e-01, 5.1040e+00, 7.1929e+00, 6.9293e+02])
+cap_class_weight = torch.Tensor([0.6003, 2.9913])
+# punct_class_weight = None
+# cap_class_weight = None
+model = HuyDangCapuModel(None, bert, punctuation_class_weight=punct_class_weight, capital_class_weight=cap_class_weight)
+model.load_state_dict(torch.load(path))
+
+@app.get("/restore")
+async def restore(text: str):
+  start = time.time()
+
+  res_str = model.infer(text_ls = [text] ,batch_size = 1)
+
+  end = time.time()
+
+  return {"time": end - start, 'before': text, 'result': res_str}
+
+@app.get("/rm_then_rs")
+async def rm_then_rs(text: str):
+  start = time.time()
+
+  normal_t = remove_punctuation(text).lower()
+  res_str = model.infer(text_ls = [normal_t] ,batch_size = 1)
+
+  end = time.time()
+
+  origin_t_segs = word_tokenize(text)
+  res_t_segs = word_tokenize(res_str[0])
+
+  print(origin_t_segs)
+  print(res_t_segs)
+
+  bleu_score = sentence_bleu([origin_t_segs], res_t_segs, smoothing_function=SmoothingFunction().method7)
+
+  return {"time": end - start, 'before': text, 'result': res_str[0], 'bleu_score': bleu_score}
+
 if __name__ == '__main__':
 
-    path = '/home/huydang/project/nemo_capu/checkpoints/training_new128_5000k_from_ep10_formal_weighted/2022_06_20_07_53_10/checkpoint_35.ckpt'
+    uvicorn.run("test_api:app", host="0.0.0.0", port=8701)
 
-    bert = RobertaModel.from_pretrained(model_name, cache_dir=cache_dir)
-    punct_class_weight = torch.Tensor([2.7295e-01, 5.1040e+00, 7.1929e+00, 6.9293e+02])
-    cap_class_weight = torch.Tensor([0.6003, 2.9913])
-    # punct_class_weight = None
-    # cap_class_weight = None
-    model = HuyDangCapuModel(None, bert, punctuation_class_weight=punct_class_weight, capital_class_weight=cap_class_weight)
-    model.load_state_dict(torch.load(path))
+    # sentence_ls = ['','hôm qua trời mưa tôi không đi làm trường phòng gọi điện nhắn tin tôi cũng mặc kệ','bạn tên là gì','ông nguyễn văn  linh - trưởng phòng thực tập vừa mới được tăng lương','đi khi nào']
 
-    sentence_ls = ['','hôm qua trời mưa tôi không đi làm trường phòng gọi điện nhắn tin tôi cũng mặc kệ','bạn tên là gì','ông nguyễn văn  linh - trưởng phòng thực tập vừa mới được tăng lương','đi khi nào']
+    # print(sentence_ls)
+    # print(model.infer(text_ls = sentence_ls ,batch_size = 32))
 
-    print(sentence_ls)
-    print(model.infer(text_ls = sentence_ls ,batch_size = 32))
-
-    with open('test.txt') as f:
-        test_str = f.read()
+    # with open('test.txt') as f:
+    #     test_str = f.read()
     
-    normal_t = remove_punctuation(test_str).lower()
-    print(normal_t)
-    print(model.infer(text_ls = [normal_t] ,batch_size = 1))
+    # normal_t = remove_punctuation(test_str).lower()
+    # print(normal_t)
+    # print(model.infer(text_ls = [normal_t] ,batch_size = 1))\
+

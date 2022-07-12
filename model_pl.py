@@ -4,13 +4,24 @@ import pytorch_lightning as pl
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from typing import List, Optional, Tuple, Union
 import torch
+import torch.nn as nn
 from sklearn.metrics import classification_report
+from importlib.machinery import SourceFileLoader
+from nemo.collections.nlp.modules.common import TokenClassifier
+
+from nemo.collections.common.losses import AggregatorLoss as nemo_AggregatorLoss, CrossEntropyLoss as nemo_CrossEntropyLoss
+import os
+
+cache_dir = './cache'
+model_name = 'nguyenvulebinh/envibert'
+default_tokenizer = SourceFileLoader("envibert.tokenizer",
+                    os.path.join(cache_dir, 'envibert_tokenizer.py')).load_module().RobertaTokenizer(cache_dir)
 
 
 class PL_HuyDangCapuModel(pl.LightningModule):
     def __init__(self, pretrained_name=None, initialized_bert=None, punctuation_class_weight=None,
                  capital_class_weight=None, kwargs=None):
-        super(HuyDangCapuModel, self).__init__()
+        super(PL_HuyDangCapuModel, self).__init__()
         if not initialized_bert:
             self.bert = AutoModel.from_pretrained(pretrained_name)
         else:
@@ -56,7 +67,7 @@ class PL_HuyDangCapuModel(pl.LightningModule):
 
         self.agg_loss = nemo_AggregatorLoss(num_inputs=2)
 
-        self.theta = 0.5
+        
 
     def forward(self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -65,35 +76,23 @@ class PL_HuyDangCapuModel(pl.LightningModule):
         # punctuation_labels: Optional[torch.LongTensor] = None,
         # loss_mask: Optional[torch.BoolTensor] = None, return_idx: bool = False
         ):
-
+     
         capital_loss = 0
         punctuation_loss = 0
 
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask, return_dict=False)
-
+     
         sequence_output_for_token_classifier = outputs[0]
         sequence_output_for_token_classifier = self.dropout(sequence_output_for_token_classifier)
+
+      
+
         punctuation_classifier_logits = self.punctuation_classifier(hidden_states=sequence_output_for_token_classifier)
         capital_classifier_logits = self.capital_classifier(hidden_states=sequence_output_for_token_classifier)
+
+
         return punctuation_classifier_logits, capital_classifier_logits
-        # Equal to infer mode
- 
-
-
         
-        else:
-
-           
-
-            total_loss = self.agg_loss(loss_1=punctuation_loss, loss_2=capital_loss)
-
-            if not return_idx:
-                return total_loss, (capital_loss.item(), punctuation_loss.item())
-            else:
-                capital_idxs = torch.argmax(capital_classifier_logits, dim=-1)
-                punctuation_ids = torch.argmax(punctuation_classifier_logits, dim=-1)
-                return total_loss, (capital_loss.item(), punctuation_loss.item()), capital_idxs, punctuation_ids
-
 
     def _map_valid_id(self, idxs_batch, tokens_batch, queries_batch, mapper):
 
@@ -157,45 +156,70 @@ class PL_HuyDangCapuModel(pl.LightningModule):
             return res_batch
 
     
-    def compute_punctuation_metrics(punctuation_ids: Optional[torch.LongTensor] = None, punctuation_labels: Optional[torch.LongTensor] = None):
+    def compute_punctuation_metrics(self,punctuation_ids: Optional[torch.LongTensor] = None, punctuation_labels: Optional[torch.LongTensor] = None):
         punctuation_ids = punctuation_ids.cpu().numpy()
         punctuation_labels = punctuation_labels.cpu().numpy()
+
         punct_cls_rp = classification_report(punctuation_ids, punctuation_labels, output_dict=True, zero_division=0)
 
-        return punct_cls_rp['accuracy'], punct_cls_rp['0']['f1-score'], punct_cls_rp['1']['f1-score'], punct_cls_rp['2']['f1-score'], punct_cls_rp['3']['f1-score']
+        return {'Punct_Acc' : punct_cls_rp['accuracy'], 'Punct_Null-f1' : punct_cls_rp.get('0',{}).get('f1-score', 1), 'Punct_Comma-f1' : punct_cls_rp.get('1',{}).get('f1-score', 1), 'Punct_Period-f1' : punct_cls_rp.get('2',{}).get('f1-score', 1), 'Punct_QMark-f1' : punct_cls_rp.get('3',{}).get('f1-score', 1)}
 
-    def compute_capital_metrics(capital_idxs: Optional[torch.LongTensor] = None, capital_labels: Optional[torch.LongTensor] = None):
+    def compute_capital_metrics(self,capital_idxs: Optional[torch.LongTensor] = None, capital_labels: Optional[torch.LongTensor] = None):
         capital_idxs = capital_idxs.cpu().numpy()
         capital_labels = capital_labels.cpu().numpy()
+        
         capi_cls_rp = classification_report(capital_idxs, capital_labels, output_dict=True, zero_division=0)
 
-        return capi_cls_rp['accuracy'], capi_cls_rp['0']['f1-score'], capi_cls_rp['1']['f1-score']
-        
-    def training_step(self, bacth, batch_idx):
+        return {'Capital_Acc' : capi_cls_rp['accuracy'], 'Capital_Nullcased-f1' : capi_cls_rp.get('0',{}).get('f1-score', 1), 'Capital_Uppercased-f1' : capi_cls_rp.get('1',{}).get('f1-score', 1)}
+
+    def training_step(self, batch, batch_idx):
+       
         input_ids, attention_mask, capital_labels, punctuation_labels, loss_mask, subtoken_mask = \
         batch['input_ids'], batch['attention_mask'], batch['capital_labels'],\
         batch['punctuation_labels'], batch['loss_mask'], batch['subtoken_mask']
-        punctuation_classifier_logits, capital_classifier_logits = model(input_ids,attention_mask)
+        punctuation_classifier_logits, capital_classifier_logits = self(input_ids,attention_mask)
       
         capital_loss = self.capital_loss_fct(capital_classifier_logits[loss_mask],
                                             capital_labels[loss_mask])
 
         punctuation_loss = self.punctuation_loss_fct(punctuation_classifier_logits[loss_mask],
-                                                    punctuation_labels[loss_mask])
+                                               punctuation_labels[loss_mask])
+      
+
         total_loss = self.agg_loss(loss_1=punctuation_loss, loss_2=capital_loss)
      
-        self.log('Train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        punctuation_ids = torch.argmax(punctuation_classifier_logits, dim=-1).squeeze(-1)
-        capital_idxs = torch.argmax(capital_classifier_logits, dim=-1).squeeze(-1)
+        self.log('Train_loss', total_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+  
+        punctuation_ids = torch.argmax(punctuation_classifier_logits, dim=-1)
+        capital_idxs = torch.argmax(capital_classifier_logits, dim=-1)
+
+        punctuation_ids = punctuation_ids[subtoken_mask]
+        punctuation_labels = punctuation_labels[subtoken_mask]
+        capital_idxs = capital_idxs[subtoken_mask]
+        capital_labels = capital_labels[subtoken_mask]
+
+        training_punctuation_dict = self.compute_punctuation_metrics(punctuation_ids, punctuation_labels)
+        training_capital_dict = self.compute_capital_metrics(capital_idxs, capital_labels)
+        dict_output = {'loss': total_loss, 'Punctuation_Loss': punctuation_loss, 'Capital_Loss': capital_loss}
+
+
+        for k, v in training_punctuation_dict.items():
+            self.log(f'Training_{k}', v, on_step = True, prog_bar=True,  on_epoch=True, logger=True)
+            
+        for k, v in training_capital_dict.items():
+            self.log(f'Training_{k}', v, on_step = True, prog_bar=True,  on_epoch=True, logger=True)
+
+        dict_output.update(training_punctuation_dict)
+        dict_output.update(training_capital_dict)
+ 
+        return dict_output
         
-
-
     def configure_optimizers(self):
         no_decay = ['bias', 'LayerNorm.weight']
         optimizer_grouped_parameters = [
-            {"params": [p for n, p in model.named_parameters() if not any(
+            {"params": [p for n, p in self.named_parameters() if not any(
                 nd in n for nd in no_decay)], "weight_decay":self.kwargs.weight_decay},
-            {"params": [p for n, p in model.named_parameters() if any(
+            {"params": [p for n, p in self.named_parameters() if any(
                 nd in n for nd in no_decay)], "weight_decay":0.0}
         ]
         optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=self.kwargs.lr)

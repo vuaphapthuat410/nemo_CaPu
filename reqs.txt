@@ -1,3 +1,4 @@
+nemo-toolkit[nlp]==1.9.0
 transformers
 torch
 tqdm
@@ -5,4 +6,3 @@ bs4
 nltk
 sklearn
 pytorch-ignite
-nemo-toolkit[all]
